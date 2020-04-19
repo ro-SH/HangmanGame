@@ -28,12 +28,18 @@ HANGMAN = [pygame.image.load(f'sprites/Hangman/Hangman{i}.png') for i in range(7
 TICK = pygame.image.load('sprites/tick.png')
 CROSS = pygame.image.load('sprites/cross.png')
 
+words = []
+played_words = []
+
 playing = False
 
-guessing_word = 'testttst'.upper()
-guessed = '_' * len(guessing_word)
+guessing_word = ''
+guessed = ''
 mistakes = 0
 guessed_letters = []
+
+current_result = None
+result_count = 30
 
 class Button:
 
@@ -96,8 +102,8 @@ alphabet_buttons = [Button(19 + index % 9 *(15+ALPHABET_BUTTON_WIDTH), HEIGHT - 
 for index, letter in enumerate(ALPHABET)]
 
 result = {
-    True: f'You\'ve won!!! Congratulations!!!\nThe word was {guessing_word}.\nWould you like to play again?',
-    False: f'You\'ve lost.\nThe word was {guessing_word}.\nWould you like to play again?'
+    True: 'won!!! Congratulations!!!',
+    False: 'lost.'
 }
 
 
@@ -106,9 +112,15 @@ def start_new_game():
     global guessed
     global mistakes
     global guessed_letters
+    global played_words
 
-    guessing_word = 'testests'.upper()
+    while True:
+        guessing_word = words[randint(0, len(words))].upper()
+        if guessing_word not in played_words:
+            played_words.append(guessing_word)
+            break
     guessed = '_' * len(guessing_word)
+    print(guessing_word)
     mistakes = 0
     guessed_letters = []
 
@@ -117,13 +129,35 @@ def end_game(win, victory):
     global playing
     draw_main_window(win)
     Tk().wm_withdraw()
-    answer = messagebox.askyesno('Game Over', result[victory])
+    answer = messagebox.askyesno('Game Over', 'You\'ve ' + result[victory] + f'\nThe word was {guessing_word}.\nWould you like to play again?')
     if answer:
         start_new_game()
     else:
         playing = False
 
+
+def draw_main_word(win):
+    if len(guessing_word) > 7:
+        temp_start = 0
+        temp_width = WIDTH
+    else:
+        temp_start = (7 - len(guessing_word)) * 40
+        temp_width = WIDTH - (7 - len(guessing_word)) * 40
+
+    for index in range(len(guessing_word)):
+        line_length = round((temp_width - temp_start - 20) // len(guessing_word)) - 20
+        start_x = 20 + temp_start + index * round((temp_width - temp_start - 20) // len(guessing_word))
+        end_x = start_x + line_length
+        y = alphabet_buttons[0].y - 20 - LINE_WIDTH
+        pygame.draw.line(win, MAIN_GAME_COLOR, [start_x, y], [end_x, y], LINE_WIDTH)
+        if guessed[index] != '_':
+            letter_font = pygame.font.SysFont(MAIN_FONT, MAIN_FONT_SIZE)
+            letter = letter_font.render(guessed[index], 1, MAIN_GAME_COLOR)
+            win.blit(letter, (start_x + line_length // 2 - letter.get_width() // 2, y - letter.get_height() - 2))
+
+
 def draw_main_window(win):
+    global result_count
 
     win.fill(BG_COLOR)
     if playing:
@@ -133,24 +167,14 @@ def draw_main_window(win):
 
         win.blit(HANGMAN[mistakes], (WIDTH // 2 - (HANGMAN[mistakes].get_width() // 2), 50))
 
-        if len(guessing_word) > 7:
-            temp_start = 0
-            temp_width = WIDTH
-        else:
-            temp_start = (7 - len(guessing_word)) * 40
-            temp_width = WIDTH - (7 - len(guessing_word)) * 40
+        if result_count < 30:
+            if current_result == 'tick':
+                win.blit(TICK, (round(WIDTH * 0.75), round(HEIGHT * 0.25)))
+            elif current_result == 'cross':
+                win.blit(CROSS, (round(WIDTH * 0.75), round(HEIGHT * 0.25)))
+            result_count += 1
 
-        for index in range(len(guessing_word)):
-            line_length = round((temp_width - temp_start - 20) // len(guessing_word)) - 20
-            start_x = 20 + temp_start + index * round((temp_width - temp_start - 20) // len(guessing_word))
-            end_x = start_x + line_length
-            y = alphabet_buttons[0].y - 20 - LINE_WIDTH
-            pygame.draw.line(win, MAIN_GAME_COLOR, [start_x, y], [end_x, y], LINE_WIDTH)
-            if guessed[index] != '_':
-                letter_font = pygame.font.SysFont(MAIN_FONT, MAIN_FONT_SIZE)
-                letter = letter_font.render(guessed[index], 1, MAIN_GAME_COLOR)
-                win.blit(letter, (start_x + line_length // 2 - letter.get_width() // 2, y - letter.get_height() - 2))
-
+        draw_main_word(win)
         for button in alphabet_buttons:
             if button.text not in guessed_letters:
                 button.draw(win)
@@ -166,15 +190,20 @@ def main():
     global guessed
     global mistakes
     global guessed_letters
+    global result_count
+    global current_result
+    global words
 
-    # clock = pygame.time.Clock()
+    with open('words.txt') as f:
+        for line in f.readlines():
+            words.append(line.rstrip())
+
     pygame.init()
     window = pygame.display.set_mode(DISPLAY)
     pygame.display.set_caption('Hangman')
 
     running = True
     while running:
-        # clock.tick(30)
         pos = pygame.mouse.get_pos()
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -185,16 +214,17 @@ def main():
                 if event.type == pygame.MOUSEBUTTONDOWN:
                     for button in alphabet_buttons:
                         if button.is_over(pos) and button.text not in guessed_letters:
+                            result_count = 0
                             if button.text in guessing_word:
-                                print('you guessed a letter')
                                 index = 0
                                 for i in range(guessing_word.count(button.text)):
                                     letter_ind = guessing_word.find(button.text, index)
                                     guessed = guessed[:letter_ind] + button.text + guessed[letter_ind + 1:]
                                     index = letter_ind + 1
+                                current_result = 'tick'
                             else:
                                 mistakes += 1
-                                print('No such letter')
+                                current_result = 'cross'
 
                             guessed_letters.append(button.text)
                             if guessing_word == guessed:
